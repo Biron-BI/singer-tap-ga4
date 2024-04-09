@@ -18,6 +18,7 @@ from singer_sdk import typing as th
 from singer_sdk.streams import Stream
 
 from tap_google_analytics.error import is_fatal_error
+from tap_google_analytics.util import convert_dict_to_snake
 
 if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
@@ -63,18 +64,18 @@ class GoogleAnalyticsStream(Stream):
         # We always treat them as strings as we can not be sure of
         # their data type
         if (
-            attribute.startswith("goal")
-            and attribute.endswith(
-                (
+                attribute.startswith("goal")
+                and attribute.endswith(
+            (
                     "Starts",
                     "Completions",
                     "Value",
                     "ConversionRate",
                     "Abandons",
                     "AbandonRate",
-                )
             )
-            or attribute.startswith(("metric", "calcMetric"))
+        )
+                or attribute.startswith(("metric", "calcMetric"))
         ):
             return "string"
 
@@ -115,6 +116,8 @@ class GoogleAnalyticsStream(Stream):
         for metric in report_def_raw["metrics"]:
             report_definition["metrics"].append(Metric(name=metric))
 
+        report_definition["metricFilter"] = convert_dict_to_snake(report_def_raw["metricFilter"])
+
         # Add segmentIds to the request if the stream contains them
         if "segments" in report_def_raw:
             report_definition["segments"] = [
@@ -123,7 +126,7 @@ class GoogleAnalyticsStream(Stream):
         return report_definition
 
     def _request_data(
-        self, api_report_def, state_filter: str, next_page_token: Any | None
+            self, api_report_def, state_filter: str, next_page_token: Any | None
     ) -> RunReportResponse:
         return self._query_api(api_report_def, state_filter, next_page_token)
 
@@ -253,6 +256,7 @@ class GoogleAnalyticsStream(Stream):
             metrics=report_definition["metrics"],
             date_ranges=[DateRange(start_date=state_filter, end_date=self.end_date)],
             limit=self.page_size,
+            metric_filter=report_definition["metricFilter"],
             offset=(pageToken or 0) * self.page_size,
         )
 
