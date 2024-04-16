@@ -55,27 +55,20 @@ class TapGoogleAnalytics(Tap):
             th.StringType,
             description="File Path to Google Analytics Client Secrets",
         ),
-        # OAuth
         th.Property(
-            "oauth_credentials",
-            th.ObjectType(
-                th.Property(
-                    "refresh_token",
-                    th.StringType,
-                    description="Google Analytics Refresh Token",
-                ),
-                th.Property(
-                    "client_id",
-                    th.StringType,
-                    description="Google Analytics Client ID",
-                ),
-                th.Property(
-                    "client_secret",
-                    th.StringType,
-                    description="Google Analytics Client Secret",
-                ),
-            ),
-            description="Google Analytics OAuth Credentials",
+            "refresh_token",
+            th.StringType,
+            description="Google Analytics Refresh Token",
+        ),
+        th.Property(
+            "client_id",
+            th.StringType,
+            description="Google Analytics Client ID",
+        ),
+        th.Property(
+            "client_secret",
+            th.StringType,
+            description="Google Analytics Client Secret",
         ),
         # Optional
         th.Property(
@@ -114,12 +107,12 @@ class TapGoogleAnalytics(Tap):
     ).to_dict()
 
     def _initialize_credentials(self):
-        if self.config.get("oauth_credentials"):
+        if self.config.get("client_secret"):
             return OAuthCredentials.from_authorized_user_info(
                 {
-                    "client_id": self.config["oauth_credentials"]["client_id"],
-                    "client_secret": self.config["oauth_credentials"]["client_secret"],
-                    "refresh_token": self.config["oauth_credentials"]["refresh_token"],
+                    "client_id": self.config["client_id"],
+                    "client_secret": self.config["client_secret"],
+                    "refresh_token": self.config["refresh_token"],
                 }
             )
 
@@ -217,9 +210,9 @@ class TapGoogleAnalytics(Tap):
                 )
                 sys.exit(1)
 
-            if len(dimensions) > 7:  # noqa: PLR2004
+            if len(dimensions) > 9:  # noqa: PLR2004
                 self.logger.critical(
-                    "'%s' has too many dimensions defined. GA reports can have maximum 7 "
+                    "'%s' has too many dimensions defined. GA reports can have maximum 9 dimensions. "
                     "dimensions.",
                     name,
                 )
@@ -247,14 +240,14 @@ class TapGoogleAnalytics(Tap):
         # check that all the metrics are proper Google Analytics metrics
         for metric in metrics:
             if metric.startswith("goal") and metric.endswith(
-                (
-                    "Starts",
-                    "Completions",
-                    "Value",
-                    "ConversionRate",
-                    "Abandons",
-                    "AbandonRate",
-                )
+                    (
+                            "Starts",
+                            "Completions",
+                            "Value",
+                            "ConversionRate",
+                            "Abandons",
+                            "AbandonRate",
+                    )
             ):
                 # Custom Google Analytics Metrics {goalXXStarts, goalXXValue, ...}
                 continue

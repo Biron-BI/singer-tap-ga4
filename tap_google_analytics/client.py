@@ -108,7 +108,7 @@ class GoogleAnalyticsStream(Stream):
 
     @staticmethod
     def _generate_report_definition(report_def_raw):
-        report_definition = {"metrics": [], "dimensions": []}
+        report_definition = {"metrics": [], "dimensions": [], "metricFilter": None}
 
         for dimension in report_def_raw["dimensions"]:
             report_definition["dimensions"].append({"name": dimension})
@@ -116,7 +116,8 @@ class GoogleAnalyticsStream(Stream):
         for metric in report_def_raw["metrics"]:
             report_definition["metrics"].append(Metric(name=metric))
 
-        report_definition["metricFilter"] = convert_dict_to_snake(report_def_raw["metricFilter"])
+        if "metricFilter" in report_def_raw:
+            report_definition["metricFilter"] = convert_dict_to_snake(report_def_raw["metricFilter"])
 
         # Add segmentIds to the request if the stream contains them
         if "segments" in report_def_raw:
@@ -220,6 +221,10 @@ class GoogleAnalyticsStream(Stream):
                 else:
                     value = dimension
 
+                if header == "date":
+                    header = "refDate"
+                    value = f"{value[:4]}-{value[4:6]}-{value[6:]}"
+
                 record[header] = value
 
             for metric_name, value in zip(metricHeaders, dateRangeValues):
@@ -268,6 +273,7 @@ class GoogleAnalyticsStream(Stream):
             "string": th.StringType(),
             "integer": th.IntegerType(),
             "number": th.NumberType(),
+            "date": th.DateType()
         }
         return mapping.get(string_type, th.StringType())
 
@@ -301,12 +307,15 @@ class GoogleAnalyticsStream(Stream):
 
         # Add the dimensions to the schema and as key_properties
         for dimension in self.report["dimensions"]:
-            if dimension == "date":
-                date_dimension_included = True
-                self.replication_key = "date"
             data_type = self._lookup_data_type(
                 "dimension", dimension, self.dimensions_ref, self.metrics_ref
             )
+            if dimension == "date":
+                date_dimension_included = True
+                self.replication_key = "refDate"
+                dimension = "refDate"
+                data_type = "date"
+
             properties.append(th.Property(dimension, self._get_datatype(data_type), required=True))
             primary_keys.append(dimension)
 
