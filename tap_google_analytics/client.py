@@ -119,7 +119,7 @@ class GoogleAnalyticsStream(Stream):
         if "metricFilter" in report_def_raw:
             report_definition["metricFilter"] = convert_dict_to_snake(report_def_raw["metricFilter"])
 
-        if report_def_raw["property"] is not None:
+        if "property" in report_def_raw:
             report_definition["property"] = report_def_raw["property"]
 
         # Add segmentIds to the request if the stream contains them
