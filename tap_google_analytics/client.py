@@ -108,7 +108,7 @@ class GoogleAnalyticsStream(Stream):
 
     @staticmethod
     def _generate_report_definition(report_def_raw):
-        report_definition = {"metrics": [], "dimensions": [], "metricFilter": None}
+        report_definition = {"metrics": [], "dimensions": [], "metricFilter": None, "property": None}
 
         for dimension in report_def_raw["dimensions"]:
             report_definition["dimensions"].append({"name": dimension})
@@ -118,6 +118,9 @@ class GoogleAnalyticsStream(Stream):
 
         if "metricFilter" in report_def_raw:
             report_definition["metricFilter"] = convert_dict_to_snake(report_def_raw["metricFilter"])
+
+        if report_def_raw["property"] is not None:
+            report_definition["property"] = report_def_raw["property"]
 
         # Add segmentIds to the request if the stream contains them
         if "segments" in report_def_raw:
@@ -255,8 +258,9 @@ class GoogleAnalyticsStream(Stream):
         Returns:
             The Analytics Reporting API V4 response.
         """
+        prop = report_definition["property"] if report_definition["property"] is not None else self.property_id
         request = RunReportRequest(
-            property=f"properties/{self.property_id}",
+            property=f"properties/{prop}",
             dimensions=report_definition["dimensions"],
             metrics=report_definition["metrics"],
             date_ranges=[DateRange(start_date=state_filter, end_date=self.end_date)],
