@@ -49,7 +49,7 @@ class GoogleAnalyticsStream(Stream):
             if end_date_config
             else datetime.now(timezone.utc)
         )
-        end_date_offset = end_date - timedelta(days=1)
+        end_date_offset = end_date - timedelta(days=4)
 
         return end_date_offset.strftime("%Y-%m-%d")
 
