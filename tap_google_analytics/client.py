@@ -49,7 +49,7 @@ class GoogleAnalyticsStream(Stream):
             if end_date_config
             else datetime.now(timezone.utc)
         )
-        end_date_offset = end_date - timedelta(days=4)
+        end_date_offset = end_date - timedelta(days=1)
 
         return end_date_offset.strftime("%Y-%m-%d")
 
@@ -138,6 +138,7 @@ class GoogleAnalyticsStream(Stream):
         state = self.get_context_state(context)
         state_bookmark = state.get("replication_key_value") or self.config["start_date"]
         parsed = date.fromisoformat(state_bookmark)
+        parsed = parsed - timedelta(days=4)
         if parsed < date(2019, 1, 1):
             parsed = date(2019, 1, 1)
 
