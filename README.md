@@ -1,5 +1,7 @@
 # `tap-google-analytics`
 
+## Forked with some modifications
+
 Singer tap for extracting data from the Google Analytics Data API (GA4)
 
 Built with the [Meltano Singer SDK](https://sdk.meltano.com).
