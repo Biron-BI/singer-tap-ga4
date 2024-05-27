@@ -156,7 +156,7 @@ class TapGoogleAnalytics(Tap):
             self.logger.critical("'%s' file not found", report_def_file)
             sys.exit(1)
 
-    def _fetch_valid_api_metadata(self) -> tuple[dict, dict]:
+    def _fetch_valid_api_metadata(self, properties) -> tuple[dict, dict]:
         """Fetch the valid (dimensions, metrics) for the Analytics Reporting API.
 
         Returns:
@@ -171,10 +171,14 @@ class TapGoogleAnalytics(Tap):
         """
         request = GetMetadataRequest(name=f"properties/{self.config['property_id']}/metadata")
         results = self.analytics.get_metadata(request)
-
-        prop_id = self.config["property_id"]
-        LOGGER.debug("**** metadata for %s", prop_id)
-        LOGGER.debug(results)
+        for prop in properties:
+            if prop != self.config['property_id']:
+                prop_id = self.config["property_id"]
+                res = self.analytics.get_metadata(GetMetadataRequest(name=f"properties/{prop}/metadata"))
+                results.metrics.extend(res.metrics)
+                results.dimensions.extend(res.dimensions)
+                LOGGER.debug("**** metadata for %s", prop_id)
+                LOGGER.debug(results)
 
         metrics = {
             metric.api_name: metric.type_.name.replace("TYPE_", "").lower()
@@ -182,6 +186,13 @@ class TapGoogleAnalytics(Tap):
         }
         dimensions = {dimension.api_name: "string" for dimension in results.dimensions}
         return dimensions, metrics
+
+    def _get_properties_in_report(self, reports_definition):
+        properties = []
+        for report in reports_definition:
+            if "property" in report:
+                properties.append(report["property"])
+        return properties
 
     def _validate_report_def(self, reports_definition):
         for report in reports_definition:
@@ -269,8 +280,9 @@ class TapGoogleAnalytics(Tap):
         self.credentials = self._initialize_credentials()
         self.analytics = self._initialize_analytics()
         # load and validate reports
-        self.dimensions_ref, self.metrics_ref = self._fetch_valid_api_metadata()
         self.reports_definition = self._get_reports_config()
+        self.properties = list(set(self._get_properties_in_report(self.reports_definition)))
+        self.dimensions_ref, self.metrics_ref = self._fetch_valid_api_metadata(self.properties)
         self._validate_report_def(self.reports_definition)
 
     def discover_streams(self) -> list[Stream]:
