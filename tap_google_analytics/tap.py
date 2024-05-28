@@ -267,6 +267,9 @@ class TapGoogleAnalytics(Tap):
                 # Custom Google Analytics Metrics searchGoalXXConversionRate
                 continue
 
+            if metric.startswith("conversions"):
+                continue
+
             if not metric.startswith(("metric", "calcMetric")) and metric not in self.metrics_ref:
                 self.logger.critical("'%s' is not a valid Google Analytics metric", metric)
                 self.logger.info(

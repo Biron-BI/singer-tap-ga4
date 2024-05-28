@@ -76,7 +76,7 @@ class GoogleAnalyticsStream(Stream):
                     "AbandonRate",
             )
         )
-                or attribute.startswith(("metric", "calcMetric"))
+                or attribute.startswith(("metric", "calcMetric", "conversions"))
         ):
             return "string"
 
