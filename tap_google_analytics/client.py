@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import copy
-import logging
+import json
 import sys
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
+import singer_sdk._singerlib as singer
 
 import backoff
+import singer_sdk
 from google.analytics.data_v1beta.types import (
     DateRange,
     Metric,
@@ -20,6 +22,7 @@ from singer_sdk.streams import Stream
 
 from tap_google_analytics.error import is_fatal_error
 from tap_google_analytics.util import convert_dict_to_snake
+from dataclasses import make_dataclass, field
 
 if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
@@ -42,6 +45,15 @@ class GoogleAnalyticsStream(Stream):
         self.end_date = self._get_end_date()
         self.property_id = self.config["property_id"]
         self.page_size = 100000
+
+    def _write_schema_message(self) -> None:
+        """Write out a SCHEMA message with the stream schema."""
+        for schema_message in self._generate_schema_messages():
+            schema_message.__class__ = make_dataclass('SchemaMessage',
+                                                      fields=[('cleaning_column', str, field(default="refDate"))],
+                                                      bases=(singer.SchemaMessage,))
+            schema_message.cleaning_column = "refDate"
+            self._tap.write_message(schema_message)
 
     def _get_end_date(self):
         end_date_config = self.config.get("end_date")
