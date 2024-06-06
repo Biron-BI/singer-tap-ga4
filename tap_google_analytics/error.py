@@ -6,6 +6,7 @@ import contextlib
 import json
 import logging
 import socket
+import time
 
 
 class TapGaApiError(Exception):
@@ -82,6 +83,11 @@ def is_fatal_error(error):
     # Use list of errors defined in:
     # https://developers.google.com/analytics/devguides/reporting/core/v4/errors
     reason = error_reason(error)
+
+    if reason in ["userRateLimitExceeded", "rateLimitExceeded", "quotaExceeded"]:
+        LOGGER.warning("Rate limit exceeded, waiting one hour before resuming")
+        time.sleep(3600)
+
     if reason in NON_FATAL_ERRORS:
         return False
 
