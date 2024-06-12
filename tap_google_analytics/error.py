@@ -84,9 +84,10 @@ def is_fatal_error(error):
     # https://developers.google.com/analytics/devguides/reporting/core/v4/errors
     reason = error_reason(error)
 
-    if reason in ["userRateLimitExceeded", "rateLimitExceeded", "quotaExceeded"]:
+    if status == 429:
         LOGGER.warning("Rate limit exceeded, waiting one hour before resuming")
         time.sleep(3600)
+        return False
 
     if reason in NON_FATAL_ERRORS:
         return False
