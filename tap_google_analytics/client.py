@@ -143,9 +143,9 @@ class GoogleAnalyticsStream(Stream):
         return report_definition
 
     def _request_data(
-            self, api_report_def, state_filter: str, next_page_token: Any | None
+            self, api_report_def, window_start: str, window_end: str, next_page_token: Any | None
     ) -> RunReportResponse:
-        return self._query_api(api_report_def, state_filter, next_page_token)
+        return self._query_api(api_report_def, window_start, window_end, next_page_token)
 
     def _get_state_filter(self, context: dict | None) -> str:
         state = self.get_context_state(context)
@@ -158,9 +158,37 @@ class GoogleAnalyticsStream(Stream):
         # state bookmarks need to be reformatted for API requests
         return date.strftime(parsed, "%Y-%m-%d")
 
+    @staticmethod
+    def _generate_date_windows(start_date_str: str, end_date_str: str) -> list[tuple[str, str]]:
+        """Generate 30-day date windows between start and end dates.
+        
+        Args:
+            start_date_str: Start date in YYYY-MM-DD format
+            end_date_str: End date in YYYY-MM-DD format
+            
+        Returns:
+            List of (start_date, end_date) tuples for 30-day windows
+        """
+        start_date = date.fromisoformat(start_date_str)
+        end_date = date.fromisoformat(end_date_str)
+        
+        windows = []
+        current_start = start_date
+        
+        while current_start <= end_date:
+            current_end = min(current_start + timedelta(days=29), end_date)  # 30-day window (inclusive)
+            windows.append((
+                current_start.strftime("%Y-%m-%d"),
+                current_end.strftime("%Y-%m-%d")
+            ))
+            current_start = current_end + timedelta(days=1)
+            
+        return windows
+
     def _request_records(self, context: dict | None) -> Iterable[dict]:
         """Request records from REST endpoint(s), returning response records.
 
+        Data is collected in 30-day windows to avoid API limits.
         If pagination is detected, pages will be recursed automatically.
 
         Args:
@@ -173,32 +201,53 @@ class GoogleAnalyticsStream(Stream):
             RuntimeError: If a loop in pagination is detected. That is, when two
                 consecutive pagination tokens are identical.
         """
-        next_page_token: Any = None
-        finished = False
-
         state_filter = self._get_state_filter(context)
         api_report_def = self._generate_report_definition(self.report)
-        while not finished:
-            resp = self._request_data(
-                api_report_def,
-                state_filter=state_filter,
-                next_page_token=next_page_token,
-            )
-
-            yield from self._parse_response(resp)
-
-            previous_token = copy.deepcopy(next_page_token)
-            next_page_token = self._get_next_page_token(
-                response=resp, previous_token=previous_token
-            )
-            if next_page_token and next_page_token == previous_token:
-                msg = (
-                    f"Loop detected in pagination. "
-                    f"Pagination token {next_page_token} is identical to prior token."
+        
+        # Generate 30-day windows
+        date_windows = self._generate_date_windows(state_filter, self.end_date)
+        
+        for window_start, window_end in date_windows:
+            self.logger.info(f"Processing window: {window_start} to {window_end}")
+            
+            next_page_token: Any = None
+            finished = False
+            
+            while not finished:
+                resp = self._request_data(
+                    api_report_def,
+                    window_start=window_start,
+                    window_end=window_end,
+                    next_page_token=next_page_token,
                 )
-                raise RuntimeError(msg)
-            # Cycle until get_next_page_token() no longer returns a value
-            finished = not next_page_token
+
+                yield from self._parse_response(resp)
+
+                previous_token = copy.deepcopy(next_page_token)
+                next_page_token = self._get_next_page_token(
+                    response=resp, previous_token=previous_token
+                )
+                if next_page_token and next_page_token == previous_token:
+                    msg = (
+                        f"Loop detected in pagination. "
+                        f"Pagination token {next_page_token} is identical to prior token."
+                    )
+                    raise RuntimeError(msg)
+                # Cycle until get_next_page_token() no longer returns a value
+                finished = not next_page_token
+            
+            # Update state after each window if we have a replication key
+            if hasattr(self, 'replication_key') and self.replication_key:
+                window_end_date = datetime.strptime(window_end, "%Y-%m-%d").strftime("%Y-%m-%dT%H:%M:%SZ")
+                current_state = dict(self._tap.state)
+                if "bookmarks" not in current_state:
+                    current_state["bookmarks"] = {}
+                current_state["bookmarks"][self.tap_stream_id] = {
+                    "replication_key_value": window_end_date
+                }
+                self._tap.load_state(current_state)
+                state_message = singer.StateMessage(value=current_state)
+                self._tap.write_message(state_message)
 
     def _get_next_page_token(self, response: RunReportResponse, previous_token) -> Any:
         """Get the next page token from a response.
@@ -266,8 +315,14 @@ class GoogleAnalyticsStream(Stream):
             yield record
 
     @backoff.on_exception(backoff.expo, (Exception), max_tries=5, giveup=is_fatal_error)
-    def _query_api(self, report_definition, state_filter, pageToken=None) -> RunReportResponse:  # noqa: N803
+    def _query_api(self, report_definition, window_start, window_end, pageToken=None) -> RunReportResponse:  # noqa: N803
         """Query the Analytics Reporting API V4.
+
+        Args:
+            report_definition: The report configuration
+            window_start: Start date for this window (YYYY-MM-DD)
+            window_end: End date for this window (YYYY-MM-DD)
+            pageToken: Pagination token
 
         Returns:
             The Analytics Reporting API V4 response.
@@ -277,7 +332,7 @@ class GoogleAnalyticsStream(Stream):
             property=f"properties/{prop}",
             dimensions=report_definition["dimensions"],
             metrics=report_definition["metrics"],
-            date_ranges=[DateRange(start_date=state_filter, end_date=self.end_date)],
+            date_ranges=[DateRange(start_date=window_start, end_date=window_end)],
             limit=self.page_size,
             metric_filter=report_definition["metricFilter"],
             offset=(pageToken or 0) * self.page_size,
