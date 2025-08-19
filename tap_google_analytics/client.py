@@ -238,12 +238,11 @@ class GoogleAnalyticsStream(Stream):
             
             # Update state after each window if we have a replication key
             if hasattr(self, 'replication_key') and self.replication_key:
-                window_end_date = datetime.strptime(window_end, "%Y-%m-%d").strftime("%Y-%m-%dT%H:%M:%SZ")
                 current_state = dict(self._tap.state)
                 if "bookmarks" not in current_state:
                     current_state["bookmarks"] = {}
                 current_state["bookmarks"][self.tap_stream_id] = {
-                    "replication_key_value": window_end_date
+                    "replication_key_value": window_end
                 }
                 self._tap.load_state(current_state)
                 state_message = singer.StateMessage(value=current_state)
