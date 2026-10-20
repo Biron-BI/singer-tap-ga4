@@ -23,6 +23,7 @@ Built with the [Meltano Singer SDK](https://sdk.meltano.com).
 | property_id         | True     | None    | Google Analytics Property ID |
 | client_secrets      | False    | None    | Google Analytics Client Secrets Dictionary |
 | key_file_location   | False    | None    | File Path to Google Analytics Client Secrets |
+| service_account_key | False    | None    | Service account JSON key, as an object or a JSON-encoded string. Takes precedence over the OAuth keys |
 | oauth_credentials   | False    | None    | Google Analytics OAuth Credentials |
 | reports             | False    | None    | A path to a file containing the Google Analytics reports definitions |
 | reports_list        | False    | None    | List of Google Analytics Reports Definitions |
@@ -101,6 +102,26 @@ One of the credentials keys must exist:
 - key_file_location
 - oauth_credentials
 - client_secrets
+- service_account_key
+
+### Service account key
+
+Instead of `client_id`, `client_secret` and `refresh_token`, the tap can authenticate with a service account. Set `service_account_key` to the service account's JSON key, either as an object or as a JSON-encoded string. When `service_account_key` is set, it takes precedence over the OAuth keys. The service account's email must be added as a user (Viewer is enough) on the GA4 property, and the Google Analytics Data API must be enabled in the service account's project.
+
+```json
+{
+  "property_id": "123456789",
+  "start_date": "2019-05-01T00:00:00Z",
+  "service_account_key": {
+    "type": "service_account",
+    "project_id": "my-project",
+    "private_key_id": "...",
+    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+    "client_email": "tap-ga4@my-project.iam.gserviceaccount.com",
+    "token_uri": "https://oauth2.googleapis.com/token"
+  }
+}
+```
 
 
 **sample_config.json**

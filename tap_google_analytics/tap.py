@@ -56,6 +56,13 @@ class TapGoogleAnalytics(Tap):
             description="File Path to Google Analytics Client Secrets",
         ),
         th.Property(
+            "service_account_key",
+            th.CustomType({"type": ["object", "string"]}),
+            description="Service account JSON key, either as an object or as a JSON-encoded "
+            "string. Takes precedence over the OAuth keys",
+            secret=True,
+        ),
+        th.Property(
             "refresh_token",
             th.StringType,
             description="Google Analytics Refresh Token",
@@ -107,6 +114,15 @@ class TapGoogleAnalytics(Tap):
     ).to_dict()
 
     def _initialize_credentials(self):
+        # Checked first: the OAuth client id and secret can be injected by default by the runner
+        if self.config.get("service_account_key"):
+            service_account_key = self.config["service_account_key"]
+            if isinstance(service_account_key, str):
+                service_account_key = json.loads(service_account_key)
+            return service_account.Credentials.from_service_account_info(
+                service_account_key, scopes=SCOPES
+            )
+
         if self.config.get("client_secret"):
             return OAuthCredentials.from_authorized_user_info(
                 {
